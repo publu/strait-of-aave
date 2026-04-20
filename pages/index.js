@@ -168,12 +168,6 @@ function HormuzMap({ markets }) {
           </g>
         ))}
 
-        {/* Blockage zone — only if stuck boats exist */}
-        {stuckMarkets.length > 0 && (
-          <text x={400} y={46} textAnchor="middle" fontSize={7} fill="rgba(255,58,92,.35)" fontFamily="monospace" letterSpacing={2}>
-            {stuckMarkets.length} MARKET{stuckMarkets.length > 1 ? 'S' : ''} AT 100% — LIQUIDITY FROZEN
-          </text>
-        )}
 
         {/* Legend — top right */}
         <g transform="translate(670,8)" fontFamily="monospace">
