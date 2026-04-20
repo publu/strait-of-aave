@@ -1,139 +1,128 @@
-const SUBGRAPHS = {
-  Ethereum: 'https://api.thegraph.com/subgraphs/name/aave/protocol-v3',
-  Arbitrum: 'https://api.thegraph.com/subgraphs/name/aave/protocol-v3-arbitrum',
-  Optimism: 'https://api.thegraph.com/subgraphs/name/aave/protocol-v3-optimism',
-  Polygon:  'https://api.thegraph.com/subgraphs/name/aave/protocol-v3-polygon',
-  Avalanche:'https://api.thegraph.com/subgraphs/name/aave/protocol-v3-avalanche',
-  Gnosis:   'https://api.thegraph.com/subgraphs/name/aave/protocol-v3-gnosis',
-  BNB:      'https://api.thegraph.com/subgraphs/name/aave/protocol-v3-bnb',
-  Base:     'https://api.thegraph.com/subgraphs/name/aave/protocol-v3-base',
-  Scroll:   null,
+// Gets top holders by scanning recent Transfer events on-chain then batch balanceOf
+// No external API key needed — uses same RPCs as markets.js
+
+const TRANSFER = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+const ZERO_ADDR = '0'.repeat(40)
+
+const CHAINS = {
+  Ethereum: { rpcs: ['https://eth.drpc.org','https://ethereum-rpc.publicnode.com'], pool:'0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2' },
+  Arbitrum: { rpcs: ['https://arbitrum.drpc.org','https://arb1.arbitrum.io/rpc'],   pool:'0x794a61358D6845594F94dc1DB02A252b5b4814aD' },
+  Base:     { rpcs: ['https://base.drpc.org','https://mainnet.base.org'],            pool:'0xA238Dd80C259a72e81d7e4664a9801593F98d1c5' },
+  Optimism: { rpcs: ['https://optimism.drpc.org','https://mainnet.optimism.io'],    pool:'0x794a61358D6845594F94dc1DB02A252b5b4814aD' },
+  Polygon:  { rpcs: ['https://polygon.drpc.org','https://polygon-bor-rpc.publicnode.com'], pool:'0x794a61358D6845594F94dc1DB02A252b5b4814aD' },
+  Avalanche:{ rpcs: ['https://api.avax.network/ext/bc/C/rpc','https://avalanche.drpc.org'], pool:'0x794a61358D6845594F94dc1DB02A252b5b4814aD' },
+  Gnosis:   { rpcs: ['https://rpc.gnosischain.com','https://gnosis.drpc.org'],      pool:'0xb50201558B00496A145fE76f7424749556E326D8' },
+  BNB:      { rpcs: ['https://bsc-rpc.publicnode.com','https://bsc.drpc.org'],      pool:'0x6807dc923806fE8Fd134338EABCA509979a7e0cB' },
+  Scroll:   { rpcs: ['https://rpc.scroll.io'],                                      pool:'0x11fCfe756c05AD438e312a7fd934381537D3cFfe' },
 }
 
-async function gql(url, query) {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 12000)
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query }),
-      signal: ctrl.signal,
-    })
-    clearTimeout(t)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const j = await res.json()
-    if (j.errors) throw new Error(j.errors[0].message)
-    return j.data
-  } finally {
-    clearTimeout(t)
+async function tryRpc(rpcs, body, timeout = 10000) {
+  for (const url of rpcs) {
+    try {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), timeout)
+      const res = await fetch(url, {
+        method:'POST',
+        headers:{'Content-Type':'application/json','User-Agent':'strait-of-aave/1.0'},
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      })
+      clearTimeout(t)
+      if (!res.ok) continue
+      return await res.json()
+    } catch { continue }
   }
+  return null
 }
 
-function rawToAmt(raw, decimals) {
-  try {
-    const d = parseInt(decimals) || 18
-    const n = BigInt(raw || '0')
-    const div = BigInt(10) ** BigInt(d)
-    const whole = n / div
-    const rem   = n % div
-    return Number(whole) + Number(rem) / 10 ** d
-  } catch { return 0 }
+function pad(addr) { return '000000000000000000000000' + addr.replace('0x','').toLowerCase() }
+function decodeAddr(hex, slot) { return '0x' + hex.slice(slot*64+24, slot*64+64) }
+
+async function getTopHolders(rpcs, tokenAddr, decimals, blockRange = 10000) {
+  // Latest block
+  const blkRes = await tryRpc(rpcs, { jsonrpc:'2.0', method:'eth_blockNumber', params:[], id:0 })
+  if (!blkRes?.result) return []
+  const latest = Number(blkRes.result)
+  const fromBlock = '0x' + Math.max(0, latest - blockRange).toString(16)
+
+  // Transfer events
+  const logRes = await tryRpc(rpcs, {
+    jsonrpc:'2.0', method:'eth_getLogs',
+    params:[{ address: tokenAddr, topics:[TRANSFER], fromBlock, toBlock:'latest' }],
+    id:1,
+  }, 12000)
+
+  const logs = logRes?.result
+  if (!Array.isArray(logs) || !logs.length) return []
+
+  // Unique non-zero recipients from topics[2]
+  const seen = new Set()
+  for (const log of logs) {
+    if (log.topics?.[2]) {
+      const addr = log.topics[2].slice(26).toLowerCase()
+      if (addr !== ZERO_ADDR) seen.add(addr)
+    }
+  }
+
+  const addrs = [...seen].slice(0, 120)
+  if (!addrs.length) return []
+
+  // Batch balanceOf (selector 0x70a08231)
+  const batch = addrs.map((a, i) => ({
+    jsonrpc:'2.0', method:'eth_call',
+    params:[{ to: tokenAddr, data: '0x70a08231' + a.padStart(64,'0') }, 'latest'],
+    id: i,
+  }))
+  const bals = await tryRpc(rpcs, batch)
+  if (!bals) return []
+
+  const dec = Math.min(parseInt(decimals)||18, 18)
+  return (Array.isArray(bals) ? bals : [bals])
+    .filter(r => r?.result && r.result.length > 2 && r.result !== '0x' + '0'.repeat(64))
+    .map(r => ({
+      address: '0x' + addrs[r.id],
+      balance: Number(BigInt(r.result)) / 10**dec,
+    }))
+    .filter(h => h.balance > 0)
+    .sort((a, b) => b.balance - a.balance)
+    .slice(0, 10)
 }
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   const { chain, reserve } = req.query
-  const url = SUBGRAPHS[chain]
-
-  if (!url) {
-    return res.status(200).json({ depositors: [], borrowers: [], noData: true })
-  }
-
-  const r = (reserve || '').toLowerCase()
+  const cfg = CHAINS[chain]
+  if (!cfg) return res.status(200).json({ depositors:[], borrowers:[], noData:true })
 
   try {
-    // Round 1: top depositors + top borrowers
-    const d1 = await gql(url, `{
-      depositors: userReserves(
-        where: { reserve: "${r}", currentATokenBalance_gt: "0" }
-        orderBy: currentATokenBalance orderDirection: desc first: 10
-      ) {
-        user { id }
-        currentATokenBalance
-        scaledATokenBalance
-        reserve { decimals liquidityIndex }
-      }
-      borrowers: userReserves(
-        where: { reserve: "${r}", currentVariableDebt_gt: "0" }
-        orderBy: currentVariableDebt orderDirection: desc first: 10
-      ) {
-        user { id }
-        currentVariableDebt
-        reserve { decimals }
-      }
-    }`)
-
-    const decimals = parseInt(
-      d1.depositors?.[0]?.reserve?.decimals ||
-      d1.borrowers?.[0]?.reserve?.decimals || '18'
-    )
-    const liquidityIndex = BigInt(d1.depositors?.[0]?.reserve?.liquidityIndex || '1000000000000000000000000000')
-    const RAY = BigInt('1000000000000000000000000000')
-
-    const depositors = (d1.depositors || []).map(u => {
-      const current  = BigInt(u.currentATokenBalance || '0')
-      const scaled   = BigInt(u.scaledATokenBalance  || '0')
-      // principal = scaledBalance * currentLiquidityIndex / RAY
-      // interest ≈ current - principal (approximate; exact would need deposit-time index)
-      const principal = scaled * liquidityIndex / RAY
-      const interestRaw = current > principal ? current - principal : 0n
-      const interestPct = current > 0n
-        ? Number(interestRaw * 10000n / current) / 100
-        : 0
-      return {
-        address:  u.user.id,
-        balance:  rawToAmt(u.currentATokenBalance, decimals),
-        interestPct,
-      }
+    // Resolve aToken + varDebt addresses from pool
+    const rdRes = await tryRpc(cfg.rpcs, {
+      jsonrpc:'2.0', method:'eth_call',
+      params:[{ to: cfg.pool, data: '0x35ea6a75' + pad(reserve) }, 'latest'], id:0,
     })
+    const rd = rdRes?.result?.slice(2)
+    if (!rd || rd.length < 640) return res.status(200).json({ depositors:[], borrowers:[], error:'Reserve not found' })
 
-    const borrowers = (d1.borrowers || []).map(u => ({
-      address: u.user.id,
-      debt:    rawToAmt(u.currentVariableDebt, decimals),
-    }))
+    const aToken  = decodeAddr(rd, 8)
+    const varDebt = decodeAddr(rd, 10)
 
-    // Round 2: collateral for top borrowers
-    if (borrowers.length > 0) {
-      const ids = borrowers.map(b => `"${b.address}"`).join(',')
-      const d2 = await gql(url, `{
-        userReserves(
-          where: { user_in: [${ids}], usageAsCollateralEnabledOnUser: true, currentATokenBalance_gt: "0" }
-          first: 100 orderBy: currentATokenBalance orderDirection: desc
-        ) {
-          user { id }
-          reserve { symbol decimals }
-          currentATokenBalance
-        }
-      }`)
+    // Get decimals from underlying asset
+    const decRes = await tryRpc(cfg.rpcs, {
+      jsonrpc:'2.0', method:'eth_call',
+      params:[{ to: reserve, data: '0x313ce567' }, 'latest'], id:1,
+    })
+    const decimals = decRes?.result && decRes.result.length > 2
+      ? Number(BigInt(decRes.result))
+      : 18
 
-      const collMap = {}
-      for (const ur of (d2.userReserves || [])) {
-        const uid = ur.user.id
-        if (!collMap[uid]) collMap[uid] = []
-        collMap[uid].push({
-          symbol:  ur.reserve.symbol.toUpperCase(),
-          balance: rawToAmt(ur.currentATokenBalance, ur.reserve.decimals),
-        })
-      }
-      for (const b of borrowers) {
-        b.collateral = (collMap[b.address] || []).slice(0, 6)
-      }
-    }
+    const [depositors, borrowers] = await Promise.all([
+      getTopHolders(cfg.rpcs, aToken, decimals),
+      getTopHolders(cfg.rpcs, varDebt, decimals),
+    ])
 
     res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=60')
     res.status(200).json({ depositors, borrowers, decimals })
   } catch (e) {
-    res.status(200).json({ depositors: [], borrowers: [], error: e.message })
+    res.status(200).json({ depositors:[], borrowers:[], error: e.message })
   }
 }
