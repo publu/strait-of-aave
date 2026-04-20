@@ -1,0 +1,29 @@
+:root {
+  --bg:    #080810;
+  --bg2:   #0e0e1a;
+  --bg3:   #13131f;
+  --bg4:   #1a1a28;
+  --brd:   #222233;
+  --brd2:  #2c2c44;
+  --text:  #b8b8d0;
+  --dim:   #50506a;
+  --green: #00e87a;
+  --red:   #ff3a5c;
+  --yel:   #ffd24d;
+  --org:   #ff8c42;
+  --cyan:  #00d4ff;
+  --aave:  #b6509e;
+  --pur:   #9b59ff;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Courier New',monospace;
+  font-size:12px;
+  line-height:1.5;
+}
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:var(--bg); }
+::-webkit-scrollbar-thumb { background:var(--brd2); border-radius:3px; }
