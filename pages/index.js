@@ -280,6 +280,86 @@ export default function Home() {
         </div>
       </header>
 
+      {/* EXPLAINER */}
+      <div style={{margin:'0 0 0 0',border:'none',borderBottom:'1px solid var(--brd)',background:'var(--bg2)',padding:20}}>
+        <div style={{fontSize:10,letterSpacing:3,color:'var(--aave)',textTransform:'uppercase',marginBottom:14,borderBottom:'1px solid var(--brd)',paddingBottom:10}}>
+          Interest Rate Model — How Spike Duration Affects Borrowers
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:20}}>
+          <div>
+            <h3 style={{fontSize:9,letterSpacing:2,color:'var(--cyan)',marginBottom:8,textTransform:'uppercase'}}>The Kink Model</h3>
+            <p style={{fontSize:11,lineHeight:1.7}}>
+              Aave uses a two-slope IRM. Below optimal utilization the rate rises slowly (slope1).
+              Above the kink it escalates steeply (slope2) — designed to incentivize repayment and attract new deposits.
+              The rate is <em>instantaneous</em>: it reacts to utilization changes immediately.
+            </p>
+            <pre style={{
+              background:'var(--bg4)',border:'1px solid var(--brd)',
+              padding:8,marginTop:7,fontSize:10,color:'var(--yel)',lineHeight:1.9,
+              whiteSpace:'pre-wrap',
+            }}>{`util ≤ optimal:
+  rate = base + slope1 × (util / optimal)
+
+util > optimal:
+  rate = base + slope1
+       + slope2 × (util − opt)
+                / (1 − opt)`}</pre>
+          </div>
+
+          <div>
+            <h3 style={{fontSize:9,letterSpacing:2,color:'var(--cyan)',marginBottom:8,textTransform:'uppercase'}}>IRM Types</h3>
+            {[
+              { type:'stable',   title:'STABLECOINS',  desc:'Kink 80-90% · Slope2 60-75%. Gentle ceiling — 100% util hits ~14% borrow APY. Backbone of lending.' },
+              { type:'eth',      title:'ETH / LSTs',   desc:'Kink 80% · Slope2 80%. Calibrated against staking yield. Leverage staking still profitable.' },
+              { type:'btc',      title:'BTC / WBTC',   desc:'Kink 45% · Slope2 300%. Nuclear above kink. No native yield — Aave keeps rates painful to deter over-borrowing.' },
+              { type:'volatile', title:'VOLATILE',      desc:'Kink 45% · Slope2 300%. Same as BTC. Used as collateral not borrow asset. High rates protect protocol.' },
+            ].map(({ type, title, desc }) => (
+              <div key={type} style={{
+                background:'var(--bg4)',border:'1px solid var(--brd)',padding:9,marginBottom:6,
+              }}>
+                <div style={{fontSize:9,letterSpacing:2,color:TYPE_COLORS[type],marginBottom:4}}>{title}</div>
+                <div style={{fontSize:10,color:'var(--dim)',lineHeight:1.6}}>{desc}</div>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <h3 style={{fontSize:9,letterSpacing:2,color:'var(--cyan)',marginBottom:8,textTransform:'uppercase'}}>Spike Duration — Why It Matters</h3>
+            <p style={{fontSize:11,lineHeight:1.7,marginBottom:10}}>
+              The rate is the same the instant a spike hits. But interest accrues continuously.
+              Using the current highest borrow APY of <strong style={{color:'var(--red)'}}>{pct(maxBorrowApy,1)}</strong>:
+            </p>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}>
+              <thead>
+                <tr>
+                  {['Duration','Accrued','Verdict'].map(h => (
+                    <th key={h} style={{textAlign:'left',color:'var(--dim)',borderBottom:'1px solid var(--brd)',padding:'3px 6px 3px 0',fontWeight:'normal',fontSize:9,letterSpacing:1}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  ['1 hour',  maxBorrowApy/8760,  'var(--green)', 'Minimal'],
+                  ['24 hours',maxBorrowApy/365,   'var(--yel)',   'Noticeable'],
+                  ['72 hours',maxBorrowApy*3/365, 'var(--org)',   'Significant'],
+                  ['7 days',  maxBorrowApy*7/365, 'var(--red)',   'Severe'],
+                ].map(([dur, acc, color, verdict]) => (
+                  <tr key={dur}>
+                    <td style={{padding:'4px 6px 4px 0',color:'var(--dim)',borderBottom:'1px solid rgba(34,34,51,.5)'}}>{dur}</td>
+                    <td style={{padding:'4px 6px 4px 0',fontWeight:'bold',borderBottom:'1px solid rgba(34,34,51,.5)'}}>{acc.toFixed(4)}%</td>
+                    <td style={{padding:'4px 6px 4px 0',color,borderBottom:'1px solid rgba(34,34,51,.5)'}}>{verdict}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p style={{marginTop:10,fontSize:10,color:'var(--dim)'}}>
+              At 100% utilization, withdrawals are frozen — suppliers cannot exit until borrowers repay.
+              A 72-hour crunch at peak rates costs borrowers ~{pct(maxBorrowApy*3/365,3)} in interest.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* SUMMARY */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:1,background:'var(--brd)',borderBottom:'1px solid var(--brd)'}}>
         {[
@@ -377,86 +457,6 @@ export default function Home() {
             No markets match current filters.
           </div>
         )}
-      </div>
-
-      {/* EXPLAINER */}
-      <div style={{margin:20,border:'1px solid var(--brd)',background:'var(--bg2)',padding:20}}>
-        <div style={{fontSize:10,letterSpacing:3,color:'var(--aave)',textTransform:'uppercase',marginBottom:14,borderBottom:'1px solid var(--brd)',paddingBottom:10}}>
-          Interest Rate Model — How Spike Duration Affects Borrowers
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:20}}>
-          <div>
-            <h3 style={{fontSize:9,letterSpacing:2,color:'var(--cyan)',marginBottom:8,textTransform:'uppercase'}}>The Kink Model</h3>
-            <p style={{fontSize:11,lineHeight:1.7}}>
-              Aave uses a two-slope IRM. Below optimal utilization the rate rises slowly (slope1).
-              Above the kink it escalates steeply (slope2) — designed to incentivize repayment and attract new deposits.
-              The rate is <em>instantaneous</em>: it reacts to utilization changes immediately.
-            </p>
-            <pre style={{
-              background:'var(--bg4)',border:'1px solid var(--brd)',
-              padding:8,marginTop:7,fontSize:10,color:'var(--yel)',lineHeight:1.9,
-              whiteSpace:'pre-wrap',
-            }}>{`util ≤ optimal:
-  rate = base + slope1 × (util / optimal)
-
-util > optimal:
-  rate = base + slope1
-       + slope2 × (util − opt)
-                / (1 − opt)`}</pre>
-          </div>
-
-          <div>
-            <h3 style={{fontSize:9,letterSpacing:2,color:'var(--cyan)',marginBottom:8,textTransform:'uppercase'}}>IRM Types</h3>
-            {[
-              { type:'stable',   title:'STABLECOINS',  desc:'Kink 80-90% · Slope2 60-75%. Gentle ceiling — 100% util hits ~14% borrow APY. Backbone of lending.' },
-              { type:'eth',      title:'ETH / LSTs',   desc:'Kink 80% · Slope2 80%. Calibrated against staking yield. Leverage staking still profitable.' },
-              { type:'btc',      title:'BTC / WBTC',   desc:'Kink 45% · Slope2 300%. Nuclear above kink. No native yield — Aave keeps rates painful to deter over-borrowing.' },
-              { type:'volatile', title:'VOLATILE',      desc:'Kink 45% · Slope2 300%. Same as BTC. Used as collateral not borrow asset. High rates protect protocol.' },
-            ].map(({ type, title, desc }) => (
-              <div key={type} style={{
-                background:'var(--bg4)',border:'1px solid var(--brd)',padding:9,marginBottom:6,
-              }}>
-                <div style={{fontSize:9,letterSpacing:2,color:TYPE_COLORS[type],marginBottom:4}}>{title}</div>
-                <div style={{fontSize:10,color:'var(--dim)',lineHeight:1.6}}>{desc}</div>
-              </div>
-            ))}
-          </div>
-
-          <div>
-            <h3 style={{fontSize:9,letterSpacing:2,color:'var(--cyan)',marginBottom:8,textTransform:'uppercase'}}>Spike Duration — Why It Matters</h3>
-            <p style={{fontSize:11,lineHeight:1.7,marginBottom:10}}>
-              The rate is the same the instant a spike hits. But interest accrues continuously.
-              Using the current highest borrow APY of <strong style={{color:'var(--red)'}}>{pct(maxBorrowApy,1)}</strong>:
-            </p>
-            <table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}>
-              <thead>
-                <tr>
-                  {['Duration','Accrued','Verdict'].map(h => (
-                    <th key={h} style={{textAlign:'left',color:'var(--dim)',borderBottom:'1px solid var(--brd)',padding:'3px 6px 3px 0',fontWeight:'normal',fontSize:9,letterSpacing:1}}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  ['1 hour',  maxBorrowApy/8760,  'var(--green)', 'Minimal'],
-                  ['24 hours',maxBorrowApy/365,   'var(--yel)',   'Noticeable'],
-                  ['72 hours',maxBorrowApy*3/365, 'var(--org)',   'Significant'],
-                  ['7 days',  maxBorrowApy*7/365, 'var(--red)',   'Severe'],
-                ].map(([dur, acc, color, verdict]) => (
-                  <tr key={dur}>
-                    <td style={{padding:'4px 6px 4px 0',color:'var(--dim)',borderBottom:'1px solid rgba(34,34,51,.5)'}}>{dur}</td>
-                    <td style={{padding:'4px 6px 4px 0',fontWeight:'bold',borderBottom:'1px solid rgba(34,34,51,.5)'}}>{acc.toFixed(4)}%</td>
-                    <td style={{padding:'4px 6px 4px 0',color,borderBottom:'1px solid rgba(34,34,51,.5)'}}>{verdict}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p style={{marginTop:10,fontSize:10,color:'var(--dim)'}}>
-              At 100% utilization, withdrawals are frozen — suppliers cannot exit until borrowers repay.
-              A 72-hour crunch at peak rates costs borrowers ~{pct(maxBorrowApy*3/365,3)} in interest.
-            </p>
-          </div>
-        </div>
       </div>
 
       {/* FOOTER */}
