@@ -29,6 +29,15 @@ function usd(n) {
 }
 function pct(n, d=2) { return (n||0).toFixed(d)+'%' }
 
+function fmtAmt(n, sym='') {
+  if (!n || isNaN(n)) return '—'
+  const s = n >= 1e9 ? (n/1e9).toFixed(2)+'B'
+    : n >= 1e6 ? (n/1e6).toFixed(2)+'M'
+    : n >= 1e3 ? (n/1e3).toFixed(1)+'K'
+    : n.toFixed(2)
+  return sym ? s+' '+sym : s
+}
+
 function utilCls(u) {
   if (u >= 90) return 'crit'
   if (u >= 80) return 'high'
@@ -283,7 +292,7 @@ export default function Home() {
       {/* EXPLAINER */}
       <div style={{margin:'0 0 0 0',border:'none',borderBottom:'1px solid var(--brd)',background:'var(--bg2)',padding:20}}>
         <div style={{fontSize:10,letterSpacing:3,color:'var(--aave)',textTransform:'uppercase',marginBottom:14,borderBottom:'1px solid var(--brd)',paddingBottom:10}}>
-          Interest Rate Model — How Spike Duration Affects Borrowers
+          Interest Rate Model — Utilization, Kink Mechanics & Liquidation Risk
         </div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:20}}>
           <div>
@@ -324,37 +333,45 @@ util > optimal:
           </div>
 
           <div>
-            <h3 style={{fontSize:9,letterSpacing:2,color:'var(--cyan)',marginBottom:8,textTransform:'uppercase'}}>Spike Duration — Why It Matters</h3>
+            <h3 style={{fontSize:9,letterSpacing:2,color:'var(--cyan)',marginBottom:8,textTransform:'uppercase'}}>Rate Spike — Liquidation Pressure</h3>
             <p style={{fontSize:11,lineHeight:1.7,marginBottom:10}}>
-              The rate is the same the instant a spike hits. But interest accrues continuously.
-              Using the current highest borrow APY of <strong style={{color:'var(--red)'}}>{pct(maxBorrowApy,1)}</strong>:
+              At the current peak of <strong style={{color:'var(--red)'}}>{pct(maxBorrowApy,1)}</strong> borrow APY, interest compounds
+              every second. The % looks small — but rate spikes don't happen in calm markets.
+              They cluster with collateral price drops. Your health factor bleeds from both sides at once.
             </p>
             <table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}>
               <thead>
                 <tr>
-                  {['Duration','Accrued','Verdict'].map(h => (
+                  {['Duration','Debt added','per $1M position'].map(h => (
                     <th key={h} style={{textAlign:'left',color:'var(--dim)',borderBottom:'1px solid var(--brd)',padding:'3px 6px 3px 0',fontWeight:'normal',fontSize:9,letterSpacing:1}}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {[
-                  ['1 hour',  maxBorrowApy/8760,  'var(--green)', 'Minimal'],
-                  ['24 hours',maxBorrowApy/365,   'var(--yel)',   'Noticeable'],
-                  ['72 hours',maxBorrowApy*3/365, 'var(--org)',   'Significant'],
-                  ['7 days',  maxBorrowApy*7/365, 'var(--red)',   'Severe'],
-                ].map(([dur, acc, color, verdict]) => (
-                  <tr key={dur}>
-                    <td style={{padding:'4px 6px 4px 0',color:'var(--dim)',borderBottom:'1px solid rgba(34,34,51,.5)'}}>{dur}</td>
-                    <td style={{padding:'4px 6px 4px 0',fontWeight:'bold',borderBottom:'1px solid rgba(34,34,51,.5)'}}>{acc.toFixed(4)}%</td>
-                    <td style={{padding:'4px 6px 4px 0',color,borderBottom:'1px solid rgba(34,34,51,.5)'}}>{verdict}</td>
-                  </tr>
-                ))}
+                  ['1 hour',  maxBorrowApy/8760],
+                  ['24 hours',maxBorrowApy/365],
+                  ['72 hours',maxBorrowApy*3/365],
+                  ['7 days',  maxBorrowApy*7/365],
+                ].map(([dur, acc]) => {
+                  const dollars = (acc / 100 * 1_000_000)
+                  const color = acc < 0.01 ? 'var(--green)' : acc < 0.15 ? 'var(--yel)' : acc < 0.5 ? 'var(--org)' : 'var(--red)'
+                  return (
+                    <tr key={dur}>
+                      <td style={{padding:'4px 6px 4px 0',color:'var(--dim)',borderBottom:'1px solid rgba(34,34,51,.5)'}}>{dur}</td>
+                      <td style={{padding:'4px 6px 4px 0',fontWeight:'bold',color,borderBottom:'1px solid rgba(34,34,51,.5)'}}>{acc.toFixed(4)}%</td>
+                      <td style={{padding:'4px 6px 4px 0',color,borderBottom:'1px solid rgba(34,34,51,.5)'}}>
+                        ${dollars >= 1000 ? (dollars/1000).toFixed(1)+'K' : dollars.toFixed(0)}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
-            <p style={{marginTop:10,fontSize:10,color:'var(--dim)'}}>
-              At 100% utilization, withdrawals are frozen — suppliers cannot exit until borrowers repay.
-              A 72-hour crunch at peak rates costs borrowers ~{pct(maxBorrowApy*3/365,3)} in interest.
+            <p style={{marginTop:10,fontSize:10,color:'var(--dim)',lineHeight:1.6}}>
+              A leveraged position at 80% LTV can absorb maybe 1–2% of collateral drift before liquidation.
+              A 7-day spike at peak rates adds ~{pct(maxBorrowApy*7/365,2)} to your debt — on top of any collateral price move.
+              That's the squeeze.
             </p>
           </div>
         </div>
