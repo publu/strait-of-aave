@@ -4,6 +4,23 @@ import Head from 'next/head'
 const TYPE_COLORS = { stable:'#00e87a', eth:'#00d4ff', btc:'#ff8c42', volatile:'#9b59ff' }
 const TYPE_LABELS = { stable:'STABLE', eth:'ETH/LST', btc:'BTC', volatile:'VOLATILE' }
 
+const AAVE_MARKET = {
+  Ethereum: 'proto_mainnet_v3',
+  Arbitrum: 'proto_arbitrum_v3',
+  Base:     'proto_base_v3',
+  Optimism: 'proto_optimism_v3',
+  Polygon:  'proto_polygon_v3',
+  Avalanche:'proto_avalanche_v3',
+  Gnosis:   'proto_gnosis_v3',
+  BNB:      'proto_bnb_v3',
+  Scroll:   'proto_scroll_v3',
+}
+
+function aaveUrl(chain, assetAddress) {
+  const market = AAVE_MARKET[chain] || 'proto_mainnet_v3'
+  return `https://app.aave.com/reserve-overview/?underlyingAsset=${assetAddress}&marketName=${market}`
+}
+
 const CHAIN_CFG = {
   Ethereum:  { short:'ETH',  color:'#627EEA', bg:'rgba(99,126,234,.2)',  brd:'rgba(99,126,234,.5)'  },
   Arbitrum:  { short:'ARB',  color:'#28A0F0', bg:'rgba(40,160,240,.2)',  brd:'rgba(40,160,240,.5)'  },
@@ -363,6 +380,13 @@ function MarketCard({ m }) {
             fontSize:8,padding:'2px 6px',borderRadius:2,letterSpacing:1,
             background:cfg.bg,color:cfg.color,border:`1px solid ${cfg.brd}`,
           }}>{cfg.short}</span>
+          <a
+            href={aaveUrl(m.chain, m.assetAddress)}
+            target="_blank" rel="noopener noreferrer"
+            style={{fontSize:8,color:'var(--dim)',letterSpacing:1,textDecoration:'none',opacity:.7}}
+            onMouseEnter={e=>e.currentTarget.style.color='var(--aave)'}
+            onMouseLeave={e=>e.currentTarget.style.color='var(--dim)'}
+          >↗ AAVE</a>
         </div>
         <span style={{fontSize:17,fontWeight:'bold',color:utilColor(m.utilization)}}>
           {pct(m.utilization,1)}
