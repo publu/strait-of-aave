@@ -52,6 +52,131 @@ function utilColor(u) {
   return 'var(--green)'
 }
 
+function HormuzMap({ markets }) {
+  const W = 800, H = 130
+  const boatsRef   = useRef([])
+  const lastAddRef = useRef(0)
+  const idRef      = useRef(100)
+  const [renderBoats, setRenderBoats] = useState([])
+
+  const stuckMarkets = markets.filter(m => m.utilization >= 99).slice(0, 10)
+
+  useEffect(() => {
+    boatsRef.current = [0,1,2,3].map(i => ({
+      id: i,
+      x: 80 + i * 190,
+      y: 70 + (i % 3 - 1) * 8,
+      speed: 1.0 + i * 0.12,
+      dir: i % 2 === 0 ? 1 : -1,
+    }))
+    lastAddRef.current = Date.now() - 2500
+    let raf
+    const frame = () => {
+      const now = Date.now()
+      boatsRef.current = boatsRef.current
+        .map(b => ({ ...b, x: b.x + b.speed * b.dir }))
+        .filter(b => b.x > -50 && b.x < W + 50)
+      if (now - lastAddRef.current >= 3000) {
+        lastAddRef.current = now
+        const fromLeft = Math.random() > 0.5
+        boatsRef.current.push({
+          id: idRef.current++,
+          x: fromLeft ? -20 : W + 20,
+          y: 66 + Math.random() * 16,
+          speed: 0.85 + Math.random() * 0.4,
+          dir: fromLeft ? 1 : -1,
+        })
+      }
+      setRenderBoats([...boatsRef.current])
+      raf = requestAnimationFrame(frame)
+    }
+    raf = requestAnimationFrame(frame)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  const stuckPos = stuckMarkets.map((m, i) => ({
+    market: m,
+    x: 320 + (i % 5) * 30 - 60,
+    y: 64 + Math.floor(i / 5) * 16,
+  }))
+
+  const Boat = ({ x, y, dir, stuck }) => (
+    <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
+      <polygon
+        points={dir > 0 ? '-11,4 8,4 13,0 8,-4 -11,-4' : '11,4 -8,4 -13,0 -8,-4 11,-4'}
+        fill={stuck ? 'rgba(255,58,92,.22)' : 'rgba(0,180,220,.15)'}
+        stroke={stuck ? '#ff3a5c' : '#00b4dc'}
+        strokeWidth={stuck ? 1 : 0.8}
+      />
+      {stuck && <circle cx={0} cy={0} r={1.5} fill="#ff3a5c" opacity={0.9}/>}
+    </g>
+  )
+
+  return (
+    <div style={{width:'100%',background:'#060612',borderBottom:'1px solid var(--brd)',overflow:'hidden'}}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="xMidYMid slice" style={{display:'block'}}>
+        <rect width={W} height={H} fill="#060612"/>
+
+        {/* subtle water lines */}
+        {[64,71,78,85].map(y => (
+          <line key={y} x1={0} y1={y} x2={W} y2={y} stroke="#080820" strokeWidth={0.8}/>
+        ))}
+
+        {/* Iran — north coast */}
+        <path
+          d="M 0,0 L 800,0 L 800,40 C 740,36 680,44 610,50 C 555,55 510,51 465,57 C 425,62 385,58 340,62 C 295,65 250,60 200,56 C 150,51 90,50 40,53 C 20,54 8,52 0,51 Z"
+          fill="#0d0d1e" stroke="#181828" strokeWidth={0.5}
+        />
+        <text x={28} y={24} fontSize={8} fill="#22223a" letterSpacing={3} fontFamily="monospace">IRAN</text>
+
+        {/* Oman/UAE — south coast */}
+        <path
+          d="M 0,130 L 800,130 L 800,100 C 740,104 680,97 615,94 C 565,92 525,96 475,93 C 435,90 390,95 345,98 C 295,101 245,96 195,94 C 145,92 85,97 40,101 C 18,103 6,101 0,100 Z"
+          fill="#0d0d1e" stroke="#181828" strokeWidth={0.5}
+        />
+        <text x={28} y={126} fontSize={8} fill="#22223a" letterSpacing={2} fontFamily="monospace">OMAN / UAE</text>
+
+        {/* region labels in water */}
+        <text x={55} y={79} fontSize={9} fill="#0e1c2c" letterSpacing={2} fontFamily="monospace">PERSIAN GULF</text>
+        <text x={598} y={79} fontSize={9} fill="#0e1c2c" letterSpacing={1} fontFamily="monospace">GULF OF OMAN</text>
+
+        {/* shipping lane centre dashes */}
+        <line x1={0} y1={76} x2={W} y2={76} stroke="#0a1828" strokeWidth={0.7} strokeDasharray="14,10"/>
+
+        {/* moving ships */}
+        {renderBoats.map(b => <Boat key={b.id} x={b.x} y={b.y} dir={b.dir} stuck={false}/>)}
+
+        {/* stuck ships */}
+        {stuckPos.map(({ market, x, y }) => (
+          <g key={market.symbol + market.chain}>
+            <Boat x={x} y={y} dir={1} stuck/>
+            <text x={x} y={y-9} textAnchor="middle" fontSize={6.5} fill="#ff3a5c" fontFamily="monospace" opacity={0.85}>
+              {market.symbol}
+            </text>
+          </g>
+        ))}
+
+        {/* blockage zone brackets */}
+        {stuckMarkets.length > 0 && <>
+          <line x1={288} y1={52} x2={288} y2={98} stroke="rgba(255,58,92,.12)" strokeWidth={0.8} strokeDasharray="2,3"/>
+          <line x1={432} y1={52} x2={432} y2={98} stroke="rgba(255,58,92,.12)" strokeWidth={0.8} strokeDasharray="2,3"/>
+          <text x={360} y={49} textAnchor="middle" fontSize={7} fill="rgba(255,58,92,.4)" fontFamily="monospace" letterSpacing={1}>BLOCKED</text>
+        </>}
+
+        {/* legend */}
+        <g transform="translate(674,9)" fontFamily="monospace">
+          <polygon points="-9,3 7,3 10,0 7,-3 -9,-3" fill="rgba(0,180,220,.15)" stroke="#00b4dc" strokeWidth={0.8}/>
+          <text x={14} y={3} fontSize={7} fill="#404058">IN TRANSIT</text>
+          <g transform="translate(0,13)">
+            <polygon points="-9,3 7,3 10,0 7,-3 -9,-3" fill="rgba(255,58,92,.22)" stroke="#ff3a5c" strokeWidth={0.9}/>
+            <text x={14} y={3} fontSize={7} fill="#ff3a5c">{stuckMarkets.length} AT 100%</text>
+          </g>
+        </g>
+      </svg>
+    </div>
+  )
+}
+
 function computeRate(util, irm) {
   const { optimal=80, base=0, slope1=4, slope2=75 } = irm || {}
   if (util <= optimal) return base + slope1 * (util / optimal)
@@ -288,6 +413,9 @@ export default function Home() {
           {fetchedAt && <span>Updated <span style={{color:'var(--text)'}}>{new Date(fetchedAt).toLocaleTimeString()}</span></span>}
         </div>
       </header>
+
+      {/* HORMUZ MAP */}
+      <HormuzMap markets={markets}/>
 
       {/* EXPLAINER */}
       <div style={{margin:'0 0 0 0',border:'none',borderBottom:'1px solid var(--brd)',background:'var(--bg2)',padding:20}}>
