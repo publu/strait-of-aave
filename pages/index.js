@@ -94,82 +94,95 @@ function HormuzMap({ markets }) {
     return () => cancelAnimationFrame(raf)
   }, [])
 
+  // Spread stuck boats across the full strait width, 2 rows max
   const stuckPos = stuckMarkets.map((m, i) => ({
     market: m,
-    x: 320 + (i % 5) * 30 - 60,
-    y: 64 + Math.floor(i / 5) * 16,
+    x: 160 + (i % 8) * 68,
+    y: 70 + Math.floor(i / 8) * 14,
   }))
 
-  const Boat = ({ x, y, dir, stuck }) => (
-    <g transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}>
-      <polygon
-        points={dir > 0 ? '-11,4 8,4 13,0 8,-4 -11,-4' : '11,4 -8,4 -13,0 -8,-4 11,-4'}
-        fill={stuck ? 'rgba(255,58,92,.22)' : 'rgba(0,180,220,.15)'}
-        stroke={stuck ? '#ff3a5c' : '#00b4dc'}
-        strokeWidth={stuck ? 1 : 0.8}
-      />
-      {stuck && <circle cx={0} cy={0} r={1.5} fill="#ff3a5c" opacity={0.9}/>}
-    </g>
-  )
+  const shipPts = (dir) => dir > 0
+    ? '-9,3.5 7,3.5 11,0 7,-3.5 -9,-3.5'
+    : '9,3.5 -7,3.5 -11,0 -7,-3.5 9,-3.5'
 
   return (
-    <div style={{width:'100%',background:'#060612',borderBottom:'1px solid var(--brd)',overflow:'hidden'}}>
+    <div style={{width:'100%',background:'#04080f',borderBottom:'1px solid var(--brd)',overflow:'hidden'}}>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="xMidYMid slice" style={{display:'block'}}>
-        <rect width={W} height={H} fill="#060612"/>
 
-        {/* subtle water lines */}
-        {[64,71,78,85].map(y => (
-          <line key={y} x1={0} y1={y} x2={W} y2={y} stroke="#080820" strokeWidth={0.8}/>
-        ))}
+        {/* Water */}
+        <rect width={W} height={H} fill="#04080f"/>
+        <rect x={0} y={52} width={W} height={26} fill="#050d1a" opacity={0.6}/>
 
         {/* Iran — north coast */}
         <path
-          d="M 0,0 L 800,0 L 800,40 C 740,36 680,44 610,50 C 555,55 510,51 465,57 C 425,62 385,58 340,62 C 295,65 250,60 200,56 C 150,51 90,50 40,53 C 20,54 8,52 0,51 Z"
-          fill="#0d0d1e" stroke="#181828" strokeWidth={0.5}
+          d="M 0,0 L 800,0 L 800,42 C 740,38 680,46 610,52 C 555,57 510,52 465,58 C 425,63 385,59 340,63 C 295,66 250,61 200,57 C 150,52 90,51 40,54 C 20,55 8,53 0,52 Z"
+          fill="#0c0c1c" stroke="#161626" strokeWidth={1}
         />
-        <text x={28} y={24} fontSize={8} fill="#22223a" letterSpacing={3} fontFamily="monospace">IRAN</text>
+        <text x={30} y={26} fontSize={8} fill="#1e1e32" letterSpacing={3} fontFamily="monospace">IRAN</text>
 
         {/* Oman/UAE — south coast */}
         <path
-          d="M 0,130 L 800,130 L 800,100 C 740,104 680,97 615,94 C 565,92 525,96 475,93 C 435,90 390,95 345,98 C 295,101 245,96 195,94 C 145,92 85,97 40,101 C 18,103 6,101 0,100 Z"
-          fill="#0d0d1e" stroke="#181828" strokeWidth={0.5}
+          d="M 0,130 L 800,130 L 800,98 C 740,102 680,95 615,92 C 565,90 525,94 475,91 C 435,88 390,93 345,96 C 295,99 245,94 195,92 C 145,90 85,95 40,99 C 18,101 6,99 0,98 Z"
+          fill="#0c0c1c" stroke="#161626" strokeWidth={1}
         />
-        <text x={28} y={126} fontSize={8} fill="#22223a" letterSpacing={2} fontFamily="monospace">OMAN / UAE</text>
+        <text x={30} y={124} fontSize={8} fill="#1e1e32" letterSpacing={2} fontFamily="monospace">OMAN / UAE</text>
 
-        {/* region labels in water */}
-        <text x={55} y={79} fontSize={9} fill="#0e1c2c" letterSpacing={2} fontFamily="monospace">PERSIAN GULF</text>
-        <text x={598} y={79} fontSize={9} fill="#0e1c2c" letterSpacing={1} fontFamily="monospace">GULF OF OMAN</text>
+        {/* Water shimmer lines */}
+        {[63,70,77,84].map(y => (
+          <line key={y} x1={0} y1={y} x2={W} y2={y} stroke="#07111f" strokeWidth={1}/>
+        ))}
 
-        {/* shipping lane centre dashes */}
-        <line x1={0} y1={76} x2={W} y2={76} stroke="#0a1828" strokeWidth={0.7} strokeDasharray="14,10"/>
+        {/* Shipping lane */}
+        <line x1={0} y1={76} x2={W} y2={76} stroke="#0b1e30" strokeWidth={0.8} strokeDasharray="16,12"/>
 
-        {/* moving ships */}
-        {renderBoats.map(b => <Boat key={b.id} x={b.x} y={b.y} dir={b.dir} stuck={false}/>)}
+        {/* Region labels */}
+        <text x={48} y={80} fontSize={8} fill="#0c1a28" letterSpacing={2} fontFamily="monospace">PERSIAN GULF</text>
+        <text x={608} y={80} fontSize={8} fill="#0c1a28" letterSpacing={1} fontFamily="monospace">GULF OF OMAN</text>
 
-        {/* stuck ships */}
-        {stuckPos.map(({ market, x, y }) => (
-          <g key={market.symbol + market.chain}>
-            <Boat x={x} y={y} dir={1} stuck/>
-            <text x={x} y={y-9} textAnchor="middle" fontSize={6.5} fill="#ff3a5c" fontFamily="monospace" opacity={0.85}>
-              {market.symbol}
-            </text>
+        {/* Moving boats — solid cyan so they're actually visible */}
+        {renderBoats.map(b => (
+          <g key={b.id} transform={`translate(${b.x.toFixed(1)},${b.y.toFixed(1)})`}>
+            <polygon
+              points={shipPts(b.dir)}
+              fill="rgba(0,200,240,.25)"
+              stroke="#00c8f0"
+              strokeWidth={1}
+            />
           </g>
         ))}
 
-        {/* blockage zone brackets */}
-        {stuckMarkets.length > 0 && <>
-          <line x1={288} y1={52} x2={288} y2={98} stroke="rgba(255,58,92,.12)" strokeWidth={0.8} strokeDasharray="2,3"/>
-          <line x1={432} y1={52} x2={432} y2={98} stroke="rgba(255,58,92,.12)" strokeWidth={0.8} strokeDasharray="2,3"/>
-          <text x={360} y={49} textAnchor="middle" fontSize={7} fill="rgba(255,58,92,.4)" fontFamily="monospace" letterSpacing={1}>BLOCKED</text>
-        </>}
+        {/* Stuck boats — red, spread across strait, label above */}
+        {stuckPos.map(({ market, x, y }) => (
+          <g key={market.symbol + market.chain}>
+            <text x={x} y={y - 6} textAnchor="middle" fontSize={6} fill="#ff3a5c" fontFamily="monospace" opacity={0.8}>
+              {market.symbol}
+            </text>
+            <polygon
+              transform={`translate(${x},${y})`}
+              points={shipPts(1)}
+              fill="rgba(255,58,92,.18)"
+              stroke="#ff3a5c"
+              strokeWidth={1}
+            />
+            <circle cx={x} cy={y} r={1.2} fill="#ff3a5c" opacity={0.7}/>
+          </g>
+        ))}
 
-        {/* legend */}
-        <g transform="translate(674,9)" fontFamily="monospace">
-          <polygon points="-9,3 7,3 10,0 7,-3 -9,-3" fill="rgba(0,180,220,.15)" stroke="#00b4dc" strokeWidth={0.8}/>
-          <text x={14} y={3} fontSize={7} fill="#404058">IN TRANSIT</text>
-          <g transform="translate(0,13)">
-            <polygon points="-9,3 7,3 10,0 7,-3 -9,-3" fill="rgba(255,58,92,.22)" stroke="#ff3a5c" strokeWidth={0.9}/>
-            <text x={14} y={3} fontSize={7} fill="#ff3a5c">{stuckMarkets.length} AT 100%</text>
+        {/* Blockage zone — only if stuck boats exist */}
+        {stuckMarkets.length > 0 && (
+          <text x={400} y={46} textAnchor="middle" fontSize={7} fill="rgba(255,58,92,.35)" fontFamily="monospace" letterSpacing={2}>
+            {stuckMarkets.length} MARKET{stuckMarkets.length > 1 ? 'S' : ''} AT 100% — LIQUIDITY FROZEN
+          </text>
+        )}
+
+        {/* Legend — top right */}
+        <g transform="translate(670,8)" fontFamily="monospace">
+          <polygon points="-9,3 7,3 10,0 7,-3 -9,-3" fill="rgba(0,200,240,.25)" stroke="#00c8f0" strokeWidth={1}/>
+          <text x={14} y={3} fontSize={7} fill="#304050">IN TRANSIT</text>
+          <g transform="translate(0,14)">
+            <polygon points="-9,3 7,3 10,0 7,-3 -9,-3" fill="rgba(255,58,92,.18)" stroke="#ff3a5c" strokeWidth={1}/>
+            <circle cx={0} cy={0} r={1.2} fill="#ff3a5c" opacity={0.7}/>
+            <text x={14} y={3} fontSize={7} fill="#ff3a5c">{stuckMarkets.length} BLOCKED</text>
           </g>
         </g>
       </svg>
