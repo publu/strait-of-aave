@@ -281,24 +281,77 @@ async function fetchChain(chainName, cfg) {
   return markets
 }
 
-// Fallback IRM params by asset type
+// Per-token IRM params from Aave governance proposals (canonical, change only via governance vote)
+const KNOWN_IRM = {
+  USDC:    { optimal:90, base:0,   slope1:5.5,  slope2:60,  type:'stable'   },
+  USDT:    { optimal:90, base:0,   slope1:5.5,  slope2:75,  type:'stable'   },
+  DAI:     { optimal:80, base:0,   slope1:5,    slope2:75,  type:'stable'   },
+  SDAI:    { optimal:80, base:0,   slope1:5,    slope2:75,  type:'stable'   },
+  USDS:    { optimal:90, base:0,   slope1:5.5,  slope2:60,  type:'stable'   },
+  GHO:     { optimal:90, base:1.5, slope1:3.5,  slope2:50,  type:'stable'   },
+  LUSD:    { optimal:80, base:0,   slope1:4,    slope2:87,  type:'stable'   },
+  FRAX:    { optimal:80, base:0,   slope1:4,    slope2:75,  type:'stable'   },
+  PYUSD:   { optimal:90, base:0,   slope1:5,    slope2:75,  type:'stable'   },
+  USDE:    { optimal:90, base:0,   slope1:5,    slope2:75,  type:'stable'   },
+  SUSDE:   { optimal:90, base:0,   slope1:5,    slope2:75,  type:'stable'   },
+  CRVUSD:  { optimal:80, base:0,   slope1:4,    slope2:75,  type:'stable'   },
+  SUSD:    { optimal:80, base:0,   slope1:4,    slope2:100, type:'stable'   },
+  EURC:    { optimal:90, base:0,   slope1:5,    slope2:60,  type:'stable'   },
+  EURS:    { optimal:80, base:0,   slope1:4,    slope2:87,  type:'stable'   },
+  AGEUR:   { optimal:80, base:0,   slope1:4,    slope2:75,  type:'stable'   },
+  MAI:     { optimal:80, base:0,   slope1:4,    slope2:75,  type:'stable'   },
+  USDBC:   { optimal:90, base:0,   slope1:5.5,  slope2:60,  type:'stable'   },
+  USDC_E:  { optimal:90, base:0,   slope1:5.5,  slope2:60,  type:'stable'   },
+  WETH:    { optimal:80, base:0,   slope1:3.3,  slope2:80,  type:'eth'      },
+  ETH:     { optimal:80, base:0,   slope1:3.3,  slope2:80,  type:'eth'      },
+  WSTETH:  { optimal:45, base:0,   slope1:4.5,  slope2:80,  type:'eth'      },
+  STETH:   { optimal:45, base:0,   slope1:4.5,  slope2:80,  type:'eth'      },
+  CBETH:   { optimal:45, base:0,   slope1:4.5,  slope2:80,  type:'eth'      },
+  RETH:    { optimal:45, base:0,   slope1:4.5,  slope2:80,  type:'eth'      },
+  WEETH:   { optimal:45, base:0,   slope1:4.5,  slope2:80,  type:'eth'      },
+  EZETH:   { optimal:45, base:0,   slope1:4.5,  slope2:80,  type:'eth'      },
+  RSETH:   { optimal:45, base:0,   slope1:4.5,  slope2:80,  type:'eth'      },
+  OSETH:   { optimal:45, base:0,   slope1:4.5,  slope2:80,  type:'eth'      },
+  FRXETH:  { optimal:45, base:0,   slope1:4.5,  slope2:80,  type:'eth'      },
+  METH:    { optimal:45, base:0,   slope1:4.5,  slope2:80,  type:'eth'      },
+  PUFETH:  { optimal:45, base:0,   slope1:4.5,  slope2:80,  type:'eth'      },
+  WBTC:    { optimal:45, base:0,   slope1:4,    slope2:300, type:'btc'      },
+  TBTC:    { optimal:45, base:0,   slope1:4,    slope2:300, type:'btc'      },
+  CBBTC:   { optimal:45, base:0,   slope1:4,    slope2:300, type:'btc'      },
+  LBTC:    { optimal:45, base:0,   slope1:4,    slope2:300, type:'btc'      },
+  LINK:    { optimal:45, base:0,   slope1:4,    slope2:300, type:'volatile' },
+  AAVE:    { optimal:45, base:0,   slope1:7,    slope2:300, type:'volatile' },
+  UNI:     { optimal:45, base:0,   slope1:4,    slope2:300, type:'volatile' },
+  MKR:     { optimal:45, base:0,   slope1:7,    slope2:300, type:'volatile' },
+  SNX:     { optimal:80, base:3,   slope1:12,   slope2:100, type:'volatile' },
+  CRV:     { optimal:70, base:3,   slope1:14,   slope2:300, type:'volatile' },
+  BAL:     { optimal:80, base:5,   slope1:22,   slope2:150, type:'volatile' },
+  ENS:     { optimal:45, base:0,   slope1:7,    slope2:300, type:'volatile' },
+  RPL:     { optimal:45, base:0,   slope1:7,    slope2:300, type:'volatile' },
+  OP:      { optimal:45, base:0,   slope1:4,    slope2:300, type:'volatile' },
+  ARB:     { optimal:45, base:0,   slope1:4,    slope2:300, type:'volatile' },
+  GNO:     { optimal:45, base:0,   slope1:7,    slope2:300, type:'volatile' },
+}
+
 function getIRMType(sym) {
-  const s = sym.toUpperCase()
+  const s = sym.toUpperCase().replace(/[.\-]/g, '')
+  if (KNOWN_IRM[s]) return KNOWN_IRM[s].type
   if (/USD|DAI|FRAX|LUSD|GHO|SUSD|TUSD|BUSD|PYUSD|USDE|CRVUSD|AGEUR|EURS|JEUR/.test(s)) return 'stable'
-  if (/ETH|STETH|WSTETH|CBETH|RETH|FRXETH|WEETH|OSETH|EZETH|RSETH|METH|ANKR/.test(s)) return 'eth'
+  if (/ETH|STETH|WSTETH|CBETH|RETH|FRXETH|WEETH|OSETH|EZETH|RSETH|METH/.test(s)) return 'eth'
   if (/BTC|TBTC|CBBTC|LBTC/.test(s)) return 'btc'
   return 'volatile'
 }
 
 function getDefaultIRM(sym) {
-  const type = getIRMType(sym)
-  const DEFAULTS = {
-    stable:   { optimal: 90, slope1: 5.5,  slope2: 60,  base: 0 },
-    eth:      { optimal: 80, slope1: 3.3,  slope2: 80,  base: 0 },
-    btc:      { optimal: 45, slope1: 4,    slope2: 300, base: 0 },
-    volatile: { optimal: 45, slope1: 4,    slope2: 300, base: 0 },
+  const s = sym.toUpperCase().replace(/[.\-]/g, '')
+  if (KNOWN_IRM[s]) return KNOWN_IRM[s]
+  const TYPE_DEFAULTS = {
+    stable:   { optimal:90, slope1:5.5,  slope2:60,  base:0 },
+    eth:      { optimal:80, slope1:3.3,  slope2:80,  base:0 },
+    btc:      { optimal:45, slope1:4,    slope2:300, base:0 },
+    volatile: { optimal:45, slope1:4,    slope2:300, base:0 },
   }
-  return DEFAULTS[type]
+  return TYPE_DEFAULTS[getIRMType(sym)]
 }
 
 let cache = null
