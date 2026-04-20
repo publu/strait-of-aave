@@ -93,7 +93,13 @@ function MarketCard({ m }) {
 
       {/* Header */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:11}}>
-        <div style={{display:'flex',alignItems:'center',gap:7}}>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <img
+            src={`https://raw.githubusercontent.com/reddavis/Crypto-Icons-API/refs/heads/master/public/svg/icon/${m.symbol.toLowerCase()}.svg`}
+            width={22} height={22}
+            style={{borderRadius:'50%',flexShrink:0}}
+            onError={e=>{e.currentTarget.style.display='none'}}
+          />
           <span style={{fontSize:15,fontWeight:'bold',color:'#fff'}}>{m.symbol}</span>
           <span style={{
             fontSize:8,padding:'2px 6px',borderRadius:2,letterSpacing:1,
@@ -109,8 +115,8 @@ function MarketCard({ m }) {
       <div style={{marginBottom:11}}>
         <div style={{display:'flex',justifyContent:'space-between',marginBottom:3,fontSize:9,color:'var(--dim)'}}>
           <span>UTILIZATION</span>
-          <span style={{color: kinkGap >= 0 ? 'var(--red)' : 'var(--dim)'}}>
-            {kinkGap >= 0 ? `+${kinkGap.toFixed(1)}% above kink` : `${Math.abs(kinkGap).toFixed(1)}% below kink`}
+          <span style={{color: (100-m.utilization)<5 ? 'var(--red)' : (100-m.utilization)<20 ? 'var(--yel)' : 'var(--green)'}}>
+            {(100 - m.utilization).toFixed(1)}% available
           </span>
         </div>
         <div style={{height:5,background:'var(--bg4)',borderRadius:1,position:'relative',overflow:'visible'}}>
