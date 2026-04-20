@@ -136,12 +136,13 @@ function HormuzMap({ markets }) {
         <line x1={0} y1={76} x2={W} y2={76} stroke="#0b1e30" strokeWidth={0.8} strokeDasharray="16,12"/>
 
         {/* Region labels */}
-        <text x={48} y={80} fontSize={8} fill="#0c1a28" letterSpacing={2} fontFamily="monospace">PERSIAN GULF</text>
+        <text x={48} y={80} fontSize={8} fill="#0c1a28" letterSpacing={2} fontFamily="monospace">GULF OF ETHEREUM</text>
         <text x={608} y={80} fontSize={8} fill="#0c1a28" letterSpacing={1} fontFamily="monospace">GULF OF OMAN</text>
 
-        {/* Moving boats — solid cyan so they're actually visible */}
+        {/* Moving boats */}
         {renderBoats.map(b => (
-          <g key={b.id} transform={`translate(${b.x.toFixed(1)},${b.y.toFixed(1)})`}>
+          <g key={b.id} transform={`translate(${b.x.toFixed(1)},${b.y.toFixed(1)})`} style={{cursor:'crosshair'}}>
+            <title>Active — liquidity in transit{'\n'}Speed: {b.speed.toFixed(2)}x{'\n'}Heading: {b.dir > 0 ? 'Persian Gulf →' : '← Gulf of Oman'}</title>
             <polygon
               points={shipPts(b.dir)}
               fill="rgba(0,200,240,.25)"
