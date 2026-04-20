@@ -205,12 +205,98 @@ function IRMCurve({ util, irm }) {
   )
 }
 
+const KNOWN_DEC = { USDC:6, USDT:6, WBTC:8, USDBC:6, USDbC:6, GHO:18 }
+
+function HoldersPanel({ m }) {
+  const [data, setData]     = useState(null)
+  const [loading, setLoading] = useState(true)
+  const dec = KNOWN_DEC[m.symbol] || 18
+  const totalSupply = Number(BigInt(m.totalSupplyRaw || '0')) / 10**dec
+  const totalDebt   = Number(BigInt(m.totalDebtRaw   || '0')) / 10**dec
+
+  useEffect(() => {
+    setLoading(true); setData(null)
+    fetch(`/api/holders?chain=${encodeURIComponent(m.chain)}&reserve=${encodeURIComponent(m.assetAddress)}`)
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false) })
+      .catch(() => { setData({ error:'fetch failed' }); setLoading(false) })
+  }, [m.chain, m.assetAddress])
+
+  const decimals = data?.decimals || dec
+
+  if (loading) return (
+    <div style={{padding:'10px 0',color:'var(--dim)',fontSize:10,display:'flex',gap:7,alignItems:'center'}}>
+      <div style={{width:8,height:8,border:'1px solid var(--brd2)',borderTopColor:'var(--aave)',borderRadius:'50%',animation:'spin .7s linear infinite'}}/>
+      Querying subgraph…
+    </div>
+  )
+  if (data?.noData) return <div style={{padding:'10px 0',color:'var(--dim)',fontSize:10}}>No subgraph for {m.chain}</div>
+  if (data?.error || !data) return <div style={{padding:'10px 0',color:'var(--red)',fontSize:10}}>Subgraph unavailable</div>
+
+  const Row = ({ rank, addr, amount, share, color, collateral }) => (
+    <div style={{marginBottom: collateral ? 6 : 0}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'3px 0',borderBottom:'1px solid rgba(34,34,51,.4)',gap:6}}>
+        <div style={{display:'flex',alignItems:'center',gap:5,minWidth:0}}>
+          <span style={{color:'var(--dim)',fontSize:9,width:13,flexShrink:0}}>{rank}</span>
+          <span style={{fontSize:9,color:'var(--text)',fontFamily:'monospace'}}>{addr.slice(0,6)}…{addr.slice(-4)}</span>
+        </div>
+        <div style={{display:'flex',gap:9,flexShrink:0,alignItems:'center'}}>
+          <span style={{fontSize:9,color:'var(--dim)'}}>{share.toFixed(1)}%</span>
+          <span style={{fontSize:10,color,fontWeight:'bold'}}>{fmtAmt(amount)} {m.symbol}</span>
+        </div>
+      </div>
+      {collateral?.length > 0 && (
+        <div style={{display:'flex',gap:3,flexWrap:'wrap',paddingLeft:18,paddingTop:3,paddingBottom:2}}>
+          <span style={{fontSize:8,color:'var(--dim)'}}>collateral:</span>
+          {collateral.map(c => (
+            <span key={c.symbol} style={{fontSize:8,padding:'1px 5px',background:'rgba(155,89,255,.12)',border:'1px solid rgba(155,89,255,.28)',color:'var(--pur)',borderRadius:2}}>{c.symbol}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  return (
+    <div style={{paddingTop:11,borderTop:'1px solid var(--brd)'}}>
+      <div style={{marginBottom:11}}>
+        <div style={{fontSize:9,letterSpacing:2,color:'var(--green)',marginBottom:5,display:'flex',justifyContent:'space-between'}}>
+          <span>TOP DEPOSITORS</span>
+          <span style={{color:'var(--dim)',letterSpacing:0}}>earning {pct(m.supplyApy,2)} APY</span>
+        </div>
+        {data.depositors.length === 0
+          ? <div style={{color:'var(--dim)',fontSize:10}}>No data</div>
+          : data.depositors.map((d,i) => (
+            <Row key={d.address} rank={i+1} addr={d.address}
+              amount={d.balance} share={totalSupply > 0 ? d.balance/totalSupply*100 : 0}
+              color="var(--green)"
+            />
+          ))
+        }
+      </div>
+      <div>
+        <div style={{fontSize:9,letterSpacing:2,color:'var(--red)',marginBottom:5,display:'flex',justifyContent:'space-between'}}>
+          <span>TOP BORROWERS</span>
+          <span style={{color:'var(--dim)',letterSpacing:0}}>paying {pct(m.borrowApy,2)} APY</span>
+        </div>
+        {data.borrowers.length === 0
+          ? <div style={{color:'var(--dim)',fontSize:10}}>No data</div>
+          : data.borrowers.map((b,i) => (
+            <Row key={b.address} rank={i+1} addr={b.address}
+              amount={b.debt} share={totalDebt > 0 ? b.debt/totalDebt*100 : 0}
+              color="var(--red)" collateral={b.collateral}
+            />
+          ))
+        }
+      </div>
+    </div>
+  )
+}
+
 function MarketCard({ m }) {
-  const cls = utilCls(m.utilization)
+  const [expanded, setExpanded] = useState(false)
   const cfg = chainCfg(m.chain)
   const tc  = TYPE_COLORS[m.irm?.type] || '#888'
   const tl  = TYPE_LABELS[m.irm?.type] || 'OTHER'
-  const kinkGap = m.utilization - (m.irm?.optimal || 80)
   const rateAt100 = computeRate(100, m.irm)
   const leftBorderColor = utilColor(m.utilization)
 
@@ -304,6 +390,19 @@ function MarketCard({ m }) {
           <span>BASE <span style={{color:'var(--text)'}}>{m.irm?.base?.toFixed(1)??'0'}%</span></span>
         </div>
       </div>
+
+      {/* Expand toggle */}
+      <div
+        onClick={() => setExpanded(e => !e)}
+        style={{marginTop:10,paddingTop:8,borderTop:'1px solid var(--brd)',textAlign:'center',
+          fontSize:9,letterSpacing:1,color:'var(--dim)',cursor:'pointer',userSelect:'none'}}
+        onMouseEnter={e=>e.currentTarget.style.color='var(--aave)'}
+        onMouseLeave={e=>e.currentTarget.style.color='var(--dim)'}
+      >
+        {expanded ? '▲ COLLAPSE' : '▼ TOP HOLDERS'}
+      </div>
+
+      {expanded && <HoldersPanel m={m}/>}
     </div>
   )
 }
