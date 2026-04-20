@@ -53,38 +53,46 @@ function utilColor(u) {
 }
 
 function HormuzMap({ markets }) {
-  const W = 800, H = 130
+  const W = 900, H = 200
   const boatsRef   = useRef([])
   const lastAddRef = useRef(0)
   const idRef      = useRef(100)
   const [renderBoats, setRenderBoats] = useState([])
 
-  const stuckMarkets = markets.filter(m => m.utilization >= 99).slice(0, 10)
+  const stuckMarkets = markets.filter(m => m.utilization >= 99).slice(0, 12)
+  const activeMarkets = markets.filter(m => m.utilization > 0 && m.utilization < 99)
+
+  // Two lanes: y=108 outbound (→), y=122 inbound (←)
+  const LANE_OUT = 108  // left to right (deposits flowing in)
+  const LANE_IN  = 122  // right to left (borrows flowing out)
+  const HULL = 'M 18,0 L 12,-4 L -14,-4 L -18,-2 L -18,2 L -14,4 L 12,4 Z'
+  const BRIDGE = 'M -12,-2.5 L -5,-2.5 L -5,2.5 L -12,2.5 Z'
 
   useEffect(() => {
-    boatsRef.current = [0,1,2,3].map(i => ({
-      id: i,
-      x: 80 + i * 190,
-      y: 70 + (i % 3 - 1) * 8,
-      speed: 1.0 + i * 0.12,
-      dir: i % 2 === 0 ? 1 : -1,
-    }))
-    lastAddRef.current = Date.now() - 2500
+    // seed boats on both lanes
+    boatsRef.current = [
+      { id:0, x:60,  y:LANE_OUT, speed:0.9,  dir:1  },
+      { id:1, x:260, y:LANE_IN,  speed:0.75, dir:-1 },
+      { id:2, x:440, y:LANE_OUT, speed:1.05, dir:1  },
+      { id:3, x:640, y:LANE_IN,  speed:0.85, dir:-1 },
+      { id:4, x:820, y:LANE_OUT, speed:0.95, dir:1  },
+    ]
+    lastAddRef.current = Date.now() - 2800
     let raf
     const frame = () => {
       const now = Date.now()
       boatsRef.current = boatsRef.current
         .map(b => ({ ...b, x: b.x + b.speed * b.dir }))
-        .filter(b => b.x > -50 && b.x < W + 50)
+        .filter(b => b.x > -60 && b.x < W + 60)
       if (now - lastAddRef.current >= 3000) {
         lastAddRef.current = now
-        const fromLeft = Math.random() > 0.5
+        const goRight = Math.random() > 0.5
         boatsRef.current.push({
           id: idRef.current++,
-          x: fromLeft ? -20 : W + 20,
-          y: 66 + Math.random() * 16,
-          speed: 0.85 + Math.random() * 0.4,
-          dir: fromLeft ? 1 : -1,
+          x:  goRight ? -30 : W + 30,
+          y:  goRight ? LANE_OUT : LANE_IN,
+          speed: 0.8 + Math.random() * 0.35,
+          dir: goRight ? 1 : -1,
         })
       }
       setRenderBoats([...boatsRef.current])
@@ -94,92 +102,114 @@ function HormuzMap({ markets }) {
     return () => cancelAnimationFrame(raf)
   }, [])
 
+  // Spread stuck ships across the channel between the two lanes
   const stuckPos = stuckMarkets.map((m, i) => ({
     market: m,
-    x: 140 + (i % 8) * 68,
-    y: 74 + Math.floor(i / 8) * 16,
-    rot: (i % 5 - 2) * 12, // each stuck ship at a different idle angle
+    x: 200 + (i % 7) * 80,
+    y: LANE_OUT + 7 + Math.floor(i / 7) * 14,
+    rot: (i % 5 - 2) * 14,
   }))
 
-  // Top-down tanker hull pointing right: bow tapered right, flat stern left
-  const HULL = 'M 20,0 L 14,-5 L -16,-5 L -20,-2 L -20,2 L -16,5 L 14,5 Z'
-  // Superstructure (bridge block, sits toward stern)
-  const BRIDGE = 'M -14,-3 L -6,-3 L -6,3 L -14,3 Z'
+  // Narrowest point x
+  const NX = 530
 
   return (
-    <div style={{width:'100%',background:'#03070f',borderBottom:'1px solid var(--brd)',overflow:'hidden'}}>
+    <div style={{width:'100%',background:'#04080e',borderBottom:'1px solid var(--brd)',overflow:'hidden',position:'relative'}}>
+      {/* Stat panels */}
+      <div style={{
+        position:'absolute',top:12,left:12,background:'rgba(4,12,24,.85)',
+        border:'1px solid #0e2038',padding:'10px 14px',fontFamily:'monospace',zIndex:2,
+      }}>
+        <div style={{fontSize:8,color:'#304858',letterSpacing:2,marginBottom:6}}>LIVE MARKETS</div>
+        <div style={{fontSize:22,fontWeight:'bold',color:'var(--cyan)',lineHeight:1}}>{markets.length}</div>
+        <div style={{fontSize:9,color:'#304858',marginTop:4}}>{activeMarkets.length} flowing · {stuckMarkets.length} frozen</div>
+      </div>
+      <div style={{
+        position:'absolute',top:12,right:12,background:'rgba(4,12,24,.85)',
+        border:'1px solid #0e2038',padding:'10px 14px',fontFamily:'monospace',zIndex:2,textAlign:'right',
+      }}>
+        <div style={{fontSize:8,color:'#304858',letterSpacing:2,marginBottom:4}}>AT 100% UTIL</div>
+        <div style={{fontSize:22,fontWeight:'bold',color: stuckMarkets.length > 0 ? 'var(--red)' : 'var(--green)',lineHeight:1}}>{stuckMarkets.length}</div>
+        <div style={{fontSize:9,color:'#304858',marginTop:4}}>withdrawals frozen</div>
+      </div>
+
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="xMidYMid slice" style={{display:'block'}}>
+        <defs>
+          {/* Glow filter for lane lines */}
+          <filter id="glow" x="-20%" y="-100%" width="140%" height="300%">
+            <feGaussianBlur stdDeviation="2" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
 
-        {/* Deep water base */}
-        <rect width={W} height={H} fill="#03070f"/>
+        {/* Water */}
+        <rect width={W} height={H} fill="#04080e"/>
+        {/* Water channel highlight */}
+        <rect x={0} y={88} width={W} height={58} fill="#050f1c" opacity={0.7}/>
 
-        {/* Water channel — slightly lighter blue */}
-        <rect x={0} y={44} width={W} height={58} fill="#04101e"/>
-
-        {/* Iran — north landmass, clearly terrain-colored */}
+        {/* Iran coastline — narrows toward right (the strait) then opens */}
         <path
-          d="M 0,0 L 800,0 L 800,44 C 730,38 660,47 590,54 C 535,59 490,53 445,60 C 405,65 365,60 320,64 C 275,68 228,63 178,58 C 130,53 78,52 36,56 C 16,57 5,55 0,54 Z"
-          fill="#0e1a0a" stroke="#182a10" strokeWidth={1.5}
+          d="M 0,0 L 900,0 L 900,65 C 840,58 780,68 710,78 C 660,85 620,80 575,88 C 545,93 520,90 495,94 C 470,90 445,84 410,80 C 365,74 310,72 240,68 C 170,63 90,62 30,67 C 14,68 4,66 0,66 Z"
+          fill="#0d1a08" stroke="#162510" strokeWidth={1.5}
         />
-        <text x={32} y={28} fontSize={8} fill="#243018" letterSpacing={3} fontFamily="monospace">IRAN</text>
+        <text x={36} y={38} fontSize={9} fill="#1e2e12" letterSpacing={4} fontFamily="monospace">IRAN</text>
 
-        {/* Oman/UAE — south landmass */}
+        {/* Qeshm island */}
+        <ellipse cx={390} cy={82} rx={22} ry={6} fill="#0f1e0a" stroke="#162510" strokeWidth={1}/>
+        <text x={390} y={84} textAnchor="middle" fontSize={6} fill="#1a2810" fontFamily="monospace">QESHM</text>
+
+        {/* Hormuz island at narrowest */}
+        <ellipse cx={NX} cy={100} rx={11} ry={5} fill="#0f1e0a" stroke="#162510" strokeWidth={1}/>
+        <text x={NX} y={102} textAnchor="middle" fontSize={5.5} fill="#1a2810" fontFamily="monospace">HORMUZ</text>
+
+        {/* UAE/Oman coastline */}
         <path
-          d="M 0,130 L 800,130 L 800,98 C 730,103 660,96 590,92 C 535,88 490,93 445,90 C 405,87 362,92 318,96 C 272,100 226,95 178,92 C 130,89 78,94 36,99 C 16,101 5,99 0,98 Z"
-          fill="#0e1a0a" stroke="#182a10" strokeWidth={1.5}
+          d="M 0,200 L 900,200 L 900,150 C 840,155 780,148 710,142 C 660,138 620,143 575,138 C 545,135 520,138 495,134 C 470,138 445,144 410,148 C 365,153 310,156 240,158 C 170,160 90,158 30,154 C 14,153 4,152 0,152 Z"
+          fill="#0d1a08" stroke="#162510" strokeWidth={1.5}
         />
-        <text x={32} y={124} fontSize={8} fill="#243018" letterSpacing={2} fontFamily="monospace">OMAN / UAE</text>
-
-        {/* Shipping lane divider */}
-        <line x1={0} y1={73} x2={W} y2={73} stroke="#071526" strokeWidth={1} strokeDasharray="20,14"/>
+        <text x={36} y={182} fontSize={9} fill="#1e2e12" letterSpacing={3} fontFamily="monospace">UAE</text>
+        <text x={700} y={182} fontSize={9} fill="#1e2e12" letterSpacing={2} fontFamily="monospace">OMAN</text>
 
         {/* Gulf labels in water */}
-        <text x={44} y={68} fontSize={8} fill="#07182a" letterSpacing={2} fontFamily="monospace">GULF OF ETHEREUM</text>
-        <text x={590} y={68} fontSize={8} fill="#07182a" letterSpacing={1} fontFamily="monospace">GULF OF OMAN</text>
+        <text x={80} y={130} fontSize={9} fill="#071424" letterSpacing={2} fontFamily="monospace">GULF OF ETHEREUM</text>
+        <text x={680} y={130} fontSize={8} fill="#071424" letterSpacing={1} fontFamily="monospace">GULF OF OMAN</text>
 
-        {/* Moving tankers — top lane going right, bottom lane going left */}
+        {/* Outbound lane line (→) */}
+        <line x1={0} y1={LANE_OUT} x2={W} y2={LANE_OUT} stroke="rgba(0,190,230,.08)" strokeWidth={6}/>
+        <line x1={0} y1={LANE_OUT} x2={W} y2={LANE_OUT} stroke="rgba(0,190,230,.25)" strokeWidth={1} strokeDasharray="24,8" filter="url(#glow)"/>
+        <text x={W-8} y={LANE_OUT-4} textAnchor="end" fontSize={7} fill="rgba(0,190,230,.4)" fontFamily="monospace">OUTBOUND →</text>
+
+        {/* Inbound lane line (←) */}
+        <line x1={0} y1={LANE_IN} x2={W} y2={LANE_IN} stroke="rgba(0,190,230,.08)" strokeWidth={6}/>
+        <line x1={0} y1={LANE_IN} x2={W} y2={LANE_IN} stroke="rgba(0,190,230,.2)" strokeWidth={1} strokeDasharray="24,8" filter="url(#glow)"/>
+        <text x={8} y={LANE_IN-4} fontSize={7} fill="rgba(0,190,230,.4)" fontFamily="monospace">← INBOUND</text>
+
+        {/* Narrowest point marker */}
+        <line x1={NX} y1={94} x2={NX} y2={133} stroke="rgba(255,210,77,.18)" strokeWidth={0.8} strokeDasharray="3,3"/>
+        <text x={NX} y={H-8} textAnchor="middle" fontSize={7} fill="rgba(255,210,77,.35)" fontFamily="monospace" letterSpacing={1}>NARROWEST POINT — KINK THRESHOLD</text>
+
+        {/* Moving ships on lanes */}
         {renderBoats.map(b => (
-          <g
-            key={b.id}
-            transform={`translate(${b.x.toFixed(1)},${b.y.toFixed(1)}) scale(${b.dir},1)`}
-            style={{cursor:'crosshair'}}
-          >
-            <title>{`Liquidity in transit\nHeading: ${b.dir > 0 ? 'Gulf of Ethereum →' : '← Gulf of Oman'}`}</title>
-            {/* Wake trail */}
-            <line x1={-21} y1={0} x2={-52} y2={0} stroke="rgba(0,180,230,.12)" strokeWidth={4}/>
-            {/* Hull */}
-            <path d={HULL} fill="rgba(0,190,230,.2)" stroke="#00beed" strokeWidth={1.2}/>
-            {/* Bridge */}
-            <path d={BRIDGE} fill="rgba(0,190,230,.35)" stroke="#00beed" strokeWidth={0.8}/>
+          <g key={b.id} transform={`translate(${b.x.toFixed(1)},${b.y}) scale(${b.dir},1)`} style={{cursor:'crosshair'}}>
+            <title>{`Liquidity in transit\nHeading: ${b.dir > 0 ? 'Outbound →' : '← Inbound'}`}</title>
+            <line x1={-19} y1={0} x2={-48} y2={0} stroke="rgba(0,190,230,.1)" strokeWidth={5}/>
+            <path d={HULL} fill="rgba(0,190,230,.22)" stroke="#00c0e8" strokeWidth={1.2}/>
+            <path d={BRIDGE} fill="rgba(0,190,230,.4)" stroke="#00c0e8" strokeWidth={0.8}/>
           </g>
         ))}
 
-        {/* Stuck tankers — anchored at odd angles, red, labeled */}
+        {/* Stuck ships off-lane, at odd angles */}
         {stuckPos.map(({ market, x, y, rot }) => (
           <g key={market.symbol + market.chain}>
-            <text x={x} y={y - 12} textAnchor="middle" fontSize={6.5} fill="#ff3a5c" fontFamily="monospace" fontWeight="bold">
-              {market.symbol}
-            </text>
+            <text x={x} y={y - 13} textAnchor="middle" fontSize={7} fill="#ff3a5c" fontFamily="monospace" fontWeight="bold">{market.symbol}</text>
             <g transform={`translate(${x},${y}) rotate(${rot})`}>
+              <line x1={-19} y1={0} x2={-44} y2={0} stroke="rgba(255,58,92,.08)" strokeWidth={5}/>
               <path d={HULL} fill="rgba(255,58,92,.18)" stroke="#ff3a5c" strokeWidth={1.2}/>
-              <path d={BRIDGE} fill="rgba(255,58,92,.3)" stroke="#ff3a5c" strokeWidth={0.8}/>
-              {/* Anchor dot */}
-              <circle cx={4} cy={0} r={1.8} fill="#ff3a5c" opacity={0.8}/>
+              <path d={BRIDGE} fill="rgba(255,58,92,.32)" stroke="#ff3a5c" strokeWidth={0.8}/>
+              <circle cx={3} cy={0} r={2} fill="#ff3a5c" opacity={0.85}/>
             </g>
           </g>
         ))}
-
-        {/* Legend */}
-        <g transform="translate(664,8)" fontFamily="monospace">
-          <g>
-            <path d="M 20,0 L 14,-4 L -10,-4 L -13,-2 L -13,2 L -10,4 L 14,4 Z" fill="rgba(0,190,230,.2)" stroke="#00beed" strokeWidth={1}/>
-            <text x={24} y={3} fontSize={7} fill="#304858">IN TRANSIT</text>
-          </g>
-          <g transform="translate(0,14)">
-            <path d="M 20,0 L 14,-4 L -10,-4 L -13,-2 L -13,2 L -10,4 L 14,4 Z" fill="rgba(255,58,92,.18)" stroke="#ff3a5c" strokeWidth={1}/>
-            <text x={24} y={3} fontSize={7} fill="#ff3a5c">{stuckMarkets.length} AT 100%</text>
-          </g>
-        </g>
       </svg>
     </div>
   )
