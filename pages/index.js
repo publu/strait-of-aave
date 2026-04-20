@@ -218,17 +218,17 @@ export default function Home() {
     return 0
   })
 
-  const totalSup = markets.reduce((s,m) => s + Number(BigInt(m.totalSupplyRaw||'0')), 0)
-  const totalDbt = markets.reduce((s,m) => s + Number(BigInt(m.totalDebtRaw||'0')), 0)
   const at100    = markets.filter(m => m.utilization >= 99).length
   const critical = markets.filter(m => m.utilization >= 90).length
-  const wavg     = totalSup > 0
-    ? markets.reduce((s,m) => s + m.utilization * Number(BigInt(m.totalSupplyRaw||'0')), 0) / totalSup
+  const high80   = markets.filter(m => m.utilization >= 80 && m.utilization < 90).length
+  const chainCount = new Set(markets.map(m => m.chain)).size
+  const wavg     = markets.length > 0
+    ? markets.reduce((s,m) => s + m.utilization, 0) / markets.length
     : 0
+  const maxBorrowApy = Math.max(...markets.map(m => m.borrowApy), 0)
 
   const topAlerts = [...markets].sort((a,b)=>b.utilization-a.utilization).filter(m=>m.utilization>=80).slice(0,14)
 
-  const topBorrowApy = [...markets].sort((a,b)=>b.borrowApy-a.borrowApy)[0]?.borrowApy || 100
 
   const liveColor = status==='live' ? 'var(--green)' : status==='error' ? 'var(--red)' : 'var(--yel)'
 
@@ -277,16 +277,17 @@ export default function Home() {
       {/* SUMMARY */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:1,background:'var(--brd)',borderBottom:'1px solid var(--brd)'}}>
         {[
-          ['Markets',      markets.length,                          '#fff'],
-          ['Total Supply', usd(totalSup),                           '#fff'],
-          ['Total Debt',   usd(totalDbt),                           'var(--cyan)'],
-          ['At 100% Util', at100,                                   'var(--red)'],
-          ['Critical >90%',critical,                                'var(--red)'],
-          ['Avg Util (wtd)',pct(wavg,1),                            wavg>=80?'var(--red)':wavg>=60?'var(--yel)':'var(--green)'],
-        ].map(([lbl,val,color]) => (
+          { lbl:'Markets',        val: markets.length || '—',       color:'#fff',           sub: `across ${chainCount} chains` },
+          { lbl:'At 100% Util',   val: at100 || '0',                color:'var(--red)',      sub: 'withdrawals frozen' },
+          { lbl:'Critical >90%',  val: critical || '0',             color: critical>0?'var(--red)':'var(--green)',   sub: 'above kink steep zone' },
+          { lbl:'High 80–90%',    val: high80 || '0',               color: high80>0?'var(--yel)':'var(--green)',     sub: 'approaching danger' },
+          { lbl:'Avg Util',       val: pct(wavg,1),                 color: wavg>=80?'var(--red)':wavg>=60?'var(--yel)':'var(--green)', sub: 'simple mean' },
+          { lbl:'Peak Borrow APY',val: pct(maxBorrowApy,1),         color:'var(--red)',      sub: 'highest active rate' },
+        ].map(({lbl,val,color,sub}) => (
           <div key={lbl} style={{background:'var(--bg2)',padding:'13px 16px'}}>
             <div style={{fontSize:9,letterSpacing:2,color:'var(--dim)',textTransform:'uppercase',marginBottom:5}}>{lbl}</div>
-            <div style={{fontSize:20,fontWeight:'bold',color}}>{val || '—'}</div>
+            <div style={{fontSize:20,fontWeight:'bold',color}}>{val}</div>
+            <div style={{fontSize:9,color:'var(--dim)',marginTop:3}}>{sub}</div>
           </div>
         ))}
       </div>
@@ -419,7 +420,7 @@ util > optimal:
             <h3 style={{fontSize:9,letterSpacing:2,color:'var(--cyan)',marginBottom:8,textTransform:'uppercase'}}>Spike Duration — Why It Matters</h3>
             <p style={{fontSize:11,lineHeight:1.7,marginBottom:10}}>
               The rate is the same the instant a spike hits. But interest accrues continuously.
-              Using the current highest borrow APY of <strong style={{color:'var(--red)'}}>{pct(topBorrowApy,1)}</strong>:
+              Using the current highest borrow APY of <strong style={{color:'var(--red)'}}>{pct(maxBorrowApy,1)}</strong>:
             </p>
             <table style={{width:'100%',borderCollapse:'collapse',fontSize:10}}>
               <thead>
@@ -431,10 +432,10 @@ util > optimal:
               </thead>
               <tbody>
                 {[
-                  ['1 hour',  topBorrowApy/8760,  'var(--green)', 'Minimal'],
-                  ['24 hours',topBorrowApy/365,   'var(--yel)',   'Noticeable'],
-                  ['72 hours',topBorrowApy*3/365, 'var(--org)',   'Significant'],
-                  ['7 days',  topBorrowApy*7/365, 'var(--red)',   'Severe'],
+                  ['1 hour',  maxBorrowApy/8760,  'var(--green)', 'Minimal'],
+                  ['24 hours',maxBorrowApy/365,   'var(--yel)',   'Noticeable'],
+                  ['72 hours',maxBorrowApy*3/365, 'var(--org)',   'Significant'],
+                  ['7 days',  maxBorrowApy*7/365, 'var(--red)',   'Severe'],
                 ].map(([dur, acc, color, verdict]) => (
                   <tr key={dur}>
                     <td style={{padding:'4px 6px 4px 0',color:'var(--dim)',borderBottom:'1px solid rgba(34,34,51,.5)'}}>{dur}</td>
@@ -446,7 +447,7 @@ util > optimal:
             </table>
             <p style={{marginTop:10,fontSize:10,color:'var(--dim)'}}>
               At 100% utilization, withdrawals are frozen — suppliers cannot exit until borrowers repay.
-              A 72-hour crunch at peak rates costs borrowers ~{pct(topBorrowApy*3/365,3)} in interest.
+              A 72-hour crunch at peak rates costs borrowers ~{pct(maxBorrowApy*3/365,3)} in interest.
             </p>
           </div>
         </div>
