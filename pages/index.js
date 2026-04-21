@@ -94,8 +94,9 @@ function HormuzMap({ markets }) {
   const idRef      = useRef(100)
   const [renderBoats, setRenderBoats] = useState([])
 
-  const stuckMarkets = markets.filter(m => m.utilization >= 99).slice(0, 12)
-  const activeMarkets = markets.filter(m => m.utilization > 0 && m.utilization < 99)
+  const govFrozenMarkets = markets.filter(m => m.govFrozen)
+  const stuckMarkets = markets.filter(m => !m.govFrozen && m.utilization >= 99).slice(0, 12)
+  const activeMarkets = markets.filter(m => !m.govFrozen && m.utilization > 0 && m.utilization < 99)
 
   // Two lanes with 42px gap so labels don't overlap
   const LANE_OUT = 120  // left to right (deposits flowing in)
@@ -145,6 +146,14 @@ function HormuzMap({ markets }) {
     rot: (i % 5 - 2) * 18,
   }))
 
+  // Gov-frozen ships: render off to the side (beached), amber color
+  const govFrozenPos = govFrozenMarkets.slice(0, 10).map((m, i) => ({
+    market: m,
+    x: 60 + (i % 5) * 80,
+    y: LANE_OUT - 28 - Math.floor(i / 5) * 20,
+    rot: (i % 3 - 1) * 25,
+  }))
+
   // Narrowest point x
   const NX = 530
 
@@ -157,7 +166,7 @@ function HormuzMap({ markets }) {
       }}>
         <div style={{fontSize:8,color:'#304858',letterSpacing:2,marginBottom:6}}>LIVE MARKETS</div>
         <div style={{fontSize:22,fontWeight:'bold',color:'var(--cyan)',lineHeight:1}}>{markets.length}</div>
-        <div style={{fontSize:9,color:'#304858',marginTop:4}}>{activeMarkets.length} flowing · {stuckMarkets.length} frozen</div>
+        <div style={{fontSize:9,color:'#304858',marginTop:4}}>{activeMarkets.length} flowing · {stuckMarkets.length} util-stuck · {govFrozenMarkets.length} gov-frozen</div>
       </div>
       <div style={{
         position:'absolute',top:12,right:12,background:'rgba(4,12,24,.85)',
@@ -165,7 +174,14 @@ function HormuzMap({ markets }) {
       }}>
         <div style={{fontSize:8,color:'#304858',letterSpacing:2,marginBottom:4}}>AT 100% UTIL</div>
         <div style={{fontSize:22,fontWeight:'bold',color: stuckMarkets.length > 0 ? 'var(--red)' : 'var(--green)',lineHeight:1}}>{stuckMarkets.length}</div>
-        <div style={{fontSize:9,color:'#304858',marginTop:4}}>governance-frozen</div>
+        <div style={{fontSize:9,color:'#304858',marginTop:4}}>withdrawals frozen</div>
+        {govFrozenMarkets.length > 0 && (
+          <div style={{marginTop:6,paddingTop:6,borderTop:'1px solid #0e2038'}}>
+            <div style={{fontSize:8,color:'#304858',letterSpacing:2,marginBottom:2}}>GOV FROZEN</div>
+            <div style={{fontSize:16,fontWeight:'bold',color:'#f59e0b',lineHeight:1}}>{govFrozenMarkets.length}</div>
+            <div style={{fontSize:9,color:'#304858',marginTop:2}}>by governance</div>
+          </div>
+        )}
       </div>
 
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="xMidYMid slice" style={{display:'block'}}>
@@ -233,7 +249,7 @@ function HormuzMap({ markets }) {
           </g>
         ))}
 
-        {/* Stuck ships off-lane, at odd angles */}
+        {/* Util-stuck ships: red, in the channel */}
         {stuckPos.map(({ market, x, y, rot }) => (
           <g key={market.symbol + market.chain}>
             <text x={x} y={y - 13} textAnchor="middle" fontSize={7} fill="#ff3a5c" fontFamily="monospace" fontWeight="bold">{market.symbol}</text>
@@ -242,6 +258,16 @@ function HormuzMap({ markets }) {
               <path d={HULL} fill="rgba(255,58,92,.18)" stroke="#ff3a5c" strokeWidth={1.2}/>
               <path d={BRIDGE} fill="rgba(255,58,92,.32)" stroke="#ff3a5c" strokeWidth={0.8}/>
               <circle cx={3} cy={0} r={2} fill="#ff3a5c" opacity={0.85}/>
+            </g>
+          </g>
+        ))}
+        {/* Gov-frozen ships: amber, beached above the LEND coastline */}
+        {govFrozenPos.map(({ market, x, y, rot }) => (
+          <g key={'gf-' + market.symbol + market.chain}>
+            <text x={x} y={y - 10} textAnchor="middle" fontSize={6} fill="#f59e0b" fontFamily="monospace" fontWeight="bold">{market.symbol}</text>
+            <g transform={`translate(${x},${y}) rotate(${rot})`}>
+              <path d={HULL} fill="rgba(245,158,11,.15)" stroke="#f59e0b" strokeWidth={1} opacity={0.7}/>
+              <path d={BRIDGE} fill="rgba(245,158,11,.25)" stroke="#f59e0b" strokeWidth={0.7} opacity={0.7}/>
             </g>
           </g>
         ))}

@@ -22,6 +22,15 @@ const CHAINS = {
   Gnosis:    { rpcs: ['https://rpc.gnosischain.com', 'https://gnosis.drpc.org'],     pool: '0xb50201558B00496A145fE76f7424749556E326D8', chainId: 100 },
   BNB:       { rpcs: ['https://bsc-rpc.publicnode.com', 'https://bsc.drpc.org'],     pool: '0x6807dc923806fE8Fd134338EABCA509979a7e0cB', chainId: 56 },
   Scroll:    { rpcs: ['https://rpc.scroll.io'],                                      pool: '0x11fCfe756c05AD438e312a7fd934381537D3cFfe', chainId: 534352 },
+  Mantle:    { rpcs: ['https://rpc.mantle.xyz'],                                     pool: '0x458F293454fE0d67EC0655f3672301301DD51422', chainId: 5000 },
+  MegaETH:   { rpcs: ['https://mainnet.megaeth.com/rpc'],                            pool: '0x7e324AbC5De01d112AfC03a584966ff199741C28', chainId: 4326 },
+  zkSync:    { rpcs: ['https://mainnet.era.zksync.io'],                              pool: '0x78e30497a3c7527d953c6B1E3541b021A98Ac43c', chainId: 324 },
+  Linea:     { rpcs: ['https://rpc.linea.build'],                                    pool: '0xc47b8C00b0f69a36fa203Ffeac0334874574a8Ac', chainId: 59144 },
+  Metis:     { rpcs: ['https://andromeda.metis.io/?owner=1088'],                     pool: '0x90df02551bB792286e8D4f13E0e357b4Bf1D6a57', chainId: 1088 },
+  Sonic:     { rpcs: ['https://rpc.soniclabs.com'],                                  pool: '0x5362dBb1e601abF3a4c14c22ffEdA64042E5eAA3', chainId: 146 },
+  Celo:      { rpcs: ['https://forno.celo.org'],                                     pool: '0x3E59A31363E2ad014dcbc521c4a0d5757d9f3402', chainId: 42220 },
+  Soneium:   { rpcs: ['https://rpc.soneium.org'],                                    pool: '0xDd3d7A7d03D9fD9ef45f3E587287922eF65CA38B', chainId: 1868 },
+  Ink:       { rpcs: ['https://rpc-gel.inkonchain.com'],                             pool: '0x2816cf15F6d2A220E789aA011D5EE4eB6c47FEbA', chainId: 57073 },
 }
 
 // Known token symbols by address (lowercase) — avoids symbol() call failures on bytes32 tokens
@@ -183,8 +192,9 @@ async function fetchChain(chainName, cfg) {
       const config = decodeUint(d, 0)
       const isActive = (config >> 56n) & 1n
       const isFrozen = (config >> 57n) & 1n
-      if (!isActive || isFrozen) continue
-      parsed.push({ addr, liqRate, varRate, aToken, varDebt, irs })
+      if (!isActive) continue
+      const decimals = Number((config >> 48n) & 0xFFn) || 18
+      parsed.push({ addr, liqRate, varRate, aToken, varDebt, irs, decimals, govFrozen: isFrozen === 1n })
     } catch { continue }
   }
 
@@ -238,6 +248,24 @@ async function fetchChain(chainName, cfg) {
     }
   }
 
+  // Step 5: get price oracle and batch asset prices
+  const oracleRes = await tryRpc(rpcs, { jsonrpc:'2.0', method:'eth_call', params:[{ to: pool, data:'0xfca513a8' }, 'latest'], id:0 })
+  const oracleAddr = oracleRes?.result?.length >= 42 ? '0x' + oracleRes.result.slice(-40) : null
+  const priceMap = {}
+  if (oracleAddr && oracleAddr !== '0x' + '0'.repeat(40)) {
+    const priceBatch = parsed.map((p, i) => ({
+      jsonrpc:'2.0', method:'eth_call',
+      params:[{ to: oracleAddr, data: '0xb3596f07' + p.addr.replace('0x','').toLowerCase().padStart(64,'0') }, 'latest'],
+      id: i,
+    }))
+    const priceRes = await tryRpc(rpcs, priceBatch)
+    if (priceRes) for (const r of (Array.isArray(priceRes) ? priceRes : [priceRes])) {
+      if (r?.result && r.result.length > 2) {
+        priceMap[parsed[r.id]?.addr] = Number(BigInt(r.result)) / 1e8
+      }
+    }
+  }
+
   // Assemble markets
   for (const p of parsed) {
     const ci = callIndex[p.addr]
@@ -273,8 +301,11 @@ async function fetchChain(chainName, cfg) {
       borrowApy,
       totalSupplyRaw: supplyRaw.toString(),
       totalDebtRaw:   debtRaw.toString(),
+      decimals: p.decimals,
+      priceUsd: priceMap[p.addr] ?? null,
       irm: { optimal, slope1, slope2, base: baseRate, type: getIRMType(symbol) },
       assetAddress: p.addr,
+      govFrozen: p.govFrozen || false,
     })
   }
 
