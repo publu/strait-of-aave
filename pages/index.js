@@ -381,7 +381,7 @@ function HoldersPanel({ m }) {
           ? <div style={{color:'var(--dim)',fontSize:10}}>No data</div>
           : data.borrowers.map((b,i) => (
             <Row key={b.address} rank={i+1} addr={b.address}
-              amount={b.debt} share={totalDebt > 0 ? b.debt/totalDebt*100 : 0}
+              amount={b.balance} share={totalDebt > 0 ? b.balance/totalDebt*100 : 0}
               color="var(--red)" collateral={b.collateral}
             />
           ))
